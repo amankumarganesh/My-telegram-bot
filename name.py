@@ -254,3 +254,134 @@ if __name__ == "__main__":
         print("Bot Response:")
         print(get_bot_response(q))
         print("-" * 50)
+
+import os
+import html
+import telebot
+
+# ============================================================
+# 1. APNA TELEGRAM BOT TOKEN YAHAN PASTE KAREIN
+# ============================================================
+BOT_TOKEN = "APNA_BOT_TOKEN_YAHAN_DAALEIN"
+
+bot = telebot.TeleBot(BOT_TOKEN)
+
+# ============================================================
+# 2. STRING SANITIZER (Render Safe)
+# ============================================================
+def clean_input_text(text):
+    if not text:
+        return ""
+    return html.escape(str(text).strip())
+
+# ============================================================
+# 3. COMPLETE RESPONSE ENGINE
+# ============================================================
+def get_bot_response(user_text):
+    text = clean_input_text(user_text).lower()
+    
+    # Check 1: Greetings, Haan, Shri Krishna, Random casual words
+    if any(k in text for k in ["haan", "ha", "krishna", "jai", "radhe", "ram", "hello", "hi", "hey", "namaste", "bhai", "shuru", "start"]):
+        return (
+            "Jai Shree Krishna! Namaste.\n"
+            "Main aapka Color Trading aur Panel Assistant bot hoon.\n\n"
+            "Aap mujhse ye sab pooch sakte hain:\n"
+            "1. Color: Kitne color hote hain aur unke rules\n"
+            "2. Uchhal: Market me uchhal kab aata hai\n"
+            "3. Giravat: Market me giravat kab aati hai\n"
+            "4. Hot Number: Sabse jyada aane wale numbers\n"
+            "5. Next Color: Agla color kaise check karein\n"
+            "6. Panel: User ID aur dashboard help"
+        )
+    
+    # Check 2: Color details (Kitne color hote hain)
+    elif any(k in text for k in ["color", "colour", "rang", "kitne", "green", "red", "violet", "laal", "hara", "baingani"]):
+        return (
+            "Color Trading me mukhyatah 3 Colors hote hain:\n\n"
+            "1. Green (Hara):\n"
+            "- Numbers: 1, 3, 7, 9 (Odd Numbers)\n"
+            "- Signal: High / Bullish movement\n\n"
+            "2. Red (Laal):\n"
+            "- Numbers: 2, 4, 6, 8 (Even Numbers)\n"
+            "- Signal: Low / Bearish movement\n\n"
+            "3. Violet (Baingani - Half Color):\n"
+            "- Numbers: 0 aur 5\n"
+            "- Rule: 0 aane par Red+Violet, 5 aane par Green+Violet milta hai."
+        )
+    
+    # Check 3: Market Uchhal (Up Trend)
+    elif any(k in text for k in ["uchhal", "up", "bullish", "high", "badhat"]):
+        return (
+            "Market me Uchhal (Up Trend) Guide:\n\n"
+            "- Uchhal kab hota hai: Jab lagatar Green color aur high numbers (7, 8, 9) repeat hote hain.\n"
+            "- Pattern: 3 ya usse jyada baar Green color lagatar aana continuous up-trend dikhata hai.\n"
+            "- Tip: Uchhal ke time counter color (Red) par jaldbazi me entry na lein, trend ke sath chalein."
+        )
+    
+    # Check 4: Market Giravat (Down Trend)
+    elif any(k in text for k in ["giravat", "down", "bearish", "low", "loss"]):
+        return (
+            "Market me Giravat (Down Trend) Guide:\n\n"
+            "- Giravat kab hoti hai: Jab lagatar Red color aur low numbers (1, 2, 3, 4) aate hain.\n"
+            "- Pattern: Lagatar Red color aane par market down-trend me hota hai.\n"
+            "- Tip: Giravat me jab tak trend break na ho, tab tak opposite bet lene se bachein."
+        )
+    
+    # Check 5: Next Color / Prediction kya aayega
+    elif any(k in text for k in ["kya aayega", "next", "aage", "aayega", "predict", "konsa"]):
+        return (
+            "Color Prediction Check Guide:\n\n"
+            "1. Trend Check: Pichle 5 rounds ka chart dekhein (Dragon trend hai ya AB-AB pattern).\n"
+            "2. AB Pattern: Red -> Green -> Red -> Green chal raha ho to alternate color aane ke chances hote hain.\n"
+            "3. Hot Numbers: Jo number abhi baar-baar aa raha hai, us color ke aane ki sambhavna jyada hoti hai."
+        )
+    
+    # Check 6: Hot Numbers / Repeating Numbers
+    elif any(k in text for k in ["hot", "number", "repeat", "cold", "ank"]):
+        return (
+            "Hot Numbers Guide:\n\n"
+            "- Hot Numbers: Jo pichle 10 se 20 rounds me sabse jyada baar aate hain (jaise 3, 7 ya 8).\n"
+            "- Cold Numbers: Jo kaafi lambe time se draw nahi huye hain.\n"
+            "- Note: Chart me Hot Numbers par dhyan dekar trading probability badhayi ja sakti hai."
+        )
+    
+    # Check 7: Panel User / Login / Balance Help
+    elif any(k in text for k in ["panel", "user", "id", "login", "account", "balance", "deposit", "withdraw"]):
+        return (
+            "Panel User Support Guide:\n\n"
+            "- Dashboard: Apna User ID aur wallet balance panel dashboard se verify karein.\n"
+            "- Transaction: Recharge ya withdrawal hamesha official panel link se hi karein.\n"
+            "- Help Desk: Kisi bhi panel issue ke liye support section me ticket generate karein."
+        )
+    
+    # Fallback (User kuch bhi galat, random, ya anjaan text likhega to ye aayega)
+    else:
+        return (
+            "Aapka message mila! Kripya niche diye gaye topics me se type karein:\n\n"
+            "- Color (Colors aur rules dekhne ke liye)\n"
+            "- Uchhal (Market up movement dekhne ke liye)\n"
+            "- Giravat (Market down movement dekhne ke liye)\n"
+            "- Hot Number (Repeating numbers dekhne ke liye)\n"
+            "- Next Color (Prediction rule dekhne ke liye)\n"
+            "- Panel (User balance aur panel help ke liye)"
+        )
+
+# ============================================================
+# 4. TELEGRAM UNIVERSAL MESSAGE LISTENER
+# ============================================================
+@bot.message_handler(func=lambda message: True)
+def handle_all_incoming_messages(message):
+    try:
+        user_message = message.text or ""
+        reply_message = get_bot_response(user_message)
+        bot.reply_to(message, reply_message)
+    except Exception as e:
+        bot.reply_to(message, "Kripya ek baar dubara message type karein!")
+
+# ============================================================
+# 5. START SERVER POLLING
+# ============================================================
+if __name__ == "__main__":
+    print("Bot bilkul ready hai aur Render par deploy ho sakta hai...")
+    bot.infinity_polling()
+
