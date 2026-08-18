@@ -2,7 +2,7 @@ from flask import Flask
 from threading import Thread
 import os
 app = flask (name)
-​@app.route('/')
+​@app.route ('/')
 def home():
 return "Bot is active"
 ​def run():
