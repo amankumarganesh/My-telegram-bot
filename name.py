@@ -1,222 +1,173 @@
+import asyncio
 import os
 from threading import Thread
 from flask import Flask
-from telegram import Update
+from gtts import gTTS
+import moviepy.editor as mp
+import replicate
+import requests
+from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
 from telegram.ext import (
-    Application,
+    ApplicationBuilder,
+    CallbackQueryHandler,
     CommandHandler,
-    MessageHandler,
     ContextTypes,
+    MessageHandler,
     filters,
 )
 
-# ============================================================
-# 1. FLASK WEB SERVER (Keep-Alive for Render Web Service)
-# ============================================================
-app = Flask(__name__)
+# Render Environment Variables
+TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
+REPLICATE_API_TOKEN = os.getenv("REPLICATE_API_TOKEN")
 
-@app.route('/')
+# Render Web Service Keep-Alive Server
+app_web = Flask(__name__)
+
+
+@app_web.route("/")
 def home():
-    return "Bot is online and active!"
+    return "Valentine 3D Video Bot is Active on Render!"
 
-def run_flask():
-    port = int(os.environ.get('PORT', 8080))
-    app.run(host='0.0.0.0', port=port)
 
-def keep_alive():
-    t = Thread(target=run_flask)
-    t.daemon = True
-    t.start()
+def run_web():
+    port = int(os.environ.get("PORT", 8080))
+    app_web.run(host="0.0.0.0", port=port)
 
-# ============================================================
-# 2. BOT CONFIGURATION
-# ============================================================
-# Environment variable se lega ya seedhe yahan quote me daal sakte hain
-BOT_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN", "")
 
-# Agar Render Environment me nahi dala hai to niche apna token likhein:
-# BOT_TOKEN = "APNA_BOT_TOKEN_YAHAN_DAALEIN"
-
-# ============================================================
-# 3. TEXT SANITIZER (Render Safe)
-# ============================================================
-def clean_safe_text(text):
-    if not text:
-        return ""
-    # Safe text sanitization without non-printable corrupt bytes
-    clean_chars = [c for c in str(text) if (32 <= ord(c) <= 126) or (128 <= ord(c) <= 65535) or c == '\n']
-    return "".join(clean_chars).strip()
-
-# ============================================================
-# 4. BOT RESPONSE LOGIC
-# ============================================================
-def generate_response(user_raw_text):
-    text = clean_safe_text(user_raw_text).lower()
-
-    # Check 1: Greetings / Casual words
-    if any(k in text for k in ["hi", "hello", "hey", "hii", "namaste", "haan", "ha", "krishna", "jai", "radhe", "ram", "bhai"]):
-        return (
-            "Namaste! Welcome to Trading Assistant Bot.\n\n"
-            "Aap mujhse niche diye gaye kisi bhi topic par pooch sakte hain:\n"
-            "- Color (Color Trading Rules)\n"
-            "- Uchhal (Market Up Trend)\n"
-            "- Giravat (Market Down Trend)\n"
-            "- Hot Number (Repeating numbers)\n"
-            "- Next Color (Prediction rule)\n"
-            "- Stock Market / RSI / MACD / Moving Average\n"
-            "- Panel (User ID & Dashboard Help)"
-        )
-
-    # Check 2: Color Trading Rules
-    elif any(k in text for k in ["color", "colour", "rang", "kitne", "green", "red", "violet", "laal", "hara", "baingani"]):
-        return (
-            "Color Trading Rules:\n\n"
-            "1. Green (Hara):\n"
-            "- Numbers: 1, 3, 7, 9 (Odd Numbers)\n"
-            "- Signal: High / Bullish Movement\n\n"
-            "2. Red (Laal):\n"
-            "- Numbers: 2, 4, 6, 8 (Even Numbers)\n"
-            "- Signal: Low / Bearish Movement\n\n"
-            "3. Violet (Baingani - Special):\n"
-            "- Numbers: 0 aur 5\n"
-            "- Rule: 0 aane par Red+Violet, 5 aane par Green+Violet milta hai."
-        )
-
-    # Check 3: Market Uchhal (Up Trend)
-    elif any(k in text for k in ["uchhal", "up", "bullish", "high", "badhat"]):
-        return (
-            "Market Uchhal (Up Trend) Guide:\n\n"
-            "- Uchhal kab hota hai: Jab lagatar Green color aur high numbers (7, 8, 9) repeat hote hain.\n"
-            "- Pattern: 3 ya usse jyada baar Green aana continuous up-trend darshata hai.\n"
-            "- Strategy: Uchhal ke time trend ke sath chalein, jaldbazi me opposite bet na lagayein."
-        )
-
-    # Check 4: Market Giravat (Down Trend)
-    elif any(k in text for k in ["giravat", "down", "bearish", "low", "loss"]):
-        return (
-            "Market Giravat (Down Trend) Guide:\n\n"
-            "- Giravat kab hoti hai: Jab lagatar Red color aur low numbers (1, 2, 3, 4) aate hain.\n"
-            "- Pattern: Lagatar Red aane par market down-trend me hota hai.\n"
-            "- Strategy: Giravat ke dauran break point ka intezar karein."
-        )
-
-    # Check 5: Next Color / Prediction Check
-    elif any(k in text for k in ["kya aayega", "next", "aage", "aayega", "predict", "konsa"]):
-        return (
-            "Next Color Guide:\n\n"
-            "1. Trend Check: Pichle rounds ka chart dekhein (Dragon trend hai ya AB-AB pattern).\n"
-            "2. AB Pattern: Red -> Green -> Red -> Green chal raha ho to alternate color follow karein.\n"
-            "3. Hot Numbers: Jo number regular repeat ho raha hai, us color ki sambhavna jyada hoti hai."
-        )
-
-    # Check 6: Hot Numbers
-    elif any(k in text for k in ["hot", "number", "repeat", "cold", "ank"]):
-        return (
-            "Hot Numbers Information:\n\n"
-            "- Hot Numbers: Jo pichle 10-20 rounds me sabse jyada baar draw hote hain.\n"
-            "- Cold Numbers: Jo kaafi lambe time se draw nahi huye hain.\n"
-            "- Tip: Chart me repeat numbers dekh kar entry lena safe hota hai."
-        )
-
-    # Check 7: Panel / User / Login / Account Help
-    elif any(k in text for k in ["panel", "user", "id", "login", "account", "balance", "deposit", "withdraw"]):
-        return (
-            "Panel User Support:\n\n"
-            "- Dashboard: Apna User ID aur balance panel dashboard se verify karein.\n"
-            "- Deposit / Withdraw: Hamesha official payment links ka hi upyog karein.\n"
-            "- Issue: Kisi bhi error ke liye panel support ticket generate karein."
-        )
-
-    # Check 8: Stock Market
-    elif any(k in text for k in ["stock market", "share market", "stocks", "shares", "stock"]):
-        return (
-            "Stock Market Guide:\n\n"
-            "Stock market ek aisa platform hai jahan publicly listed companies ke shares trade hote hain.\n"
-            "Important Tools: Price Action, Support/Resistance, Volume aur Indicators."
-        )
-
-    # Check 9: RSI
-    elif "rsi" in text:
-        return (
-            "RSI (Relative Strength Index):\n\n"
-            "RSI ek momentum indicator hai (0-100 scale):\n"
-            "- Above 70: Potentially Overbought (Giravat aa sakti hai)\n"
-            "- Below 30: Potentially Oversold (Uchhal aa sakta hai)"
-        )
-
-    # Check 10: Moving Average
-    elif "moving average" in text or text == "ma":
-        return (
-            "Moving Average (MA):\n\n"
-            "- SMA (Simple Moving Average)\n"
-            "- EMA (Exponential Moving Average)\n"
-            "Traders trend aur price direction janne ke liye iska use karte hain."
-        )
-
-    # Check 11: MACD
-    elif "macd" in text:
-        return (
-            "MACD (Moving Average Convergence Divergence):\n\n"
-            "Yeh do moving averages ke bich ka relationship dikhakar trend reversal aur momentum batata hai."
-        )
-
-    # Fallback: Agar banda kuchh bhi ulta-seedha/manual type kare to instant reply
-    else:
-        return (
-            "Aapka message mila! Kripya niche diye gaye kisi topic par type karein:\n\n"
-            "1. Color (Rules & Colors)\n"
-            "2. Uchhal (Market Up Movement)\n"
-            "3. Giravat (Market Down Movement)\n"
-            "4. Hot Number (Repeating Numbers)\n"
-            "5. Next Color (Prediction Pattern)\n"
-            "6. Panel (User ID & Balance)\n"
-            "7. RSI / MACD / Stock Market"
-        )
-
-# ============================================================
-# 5. TELEGRAM EVENT HANDLERS
-# ============================================================
+# /start कमांड
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    welcome_text = (
-        "Welcome! Main aapka Trading Assistant Bot hoon.\n\n"
-        "Aap mujhse puch sakte hain:\n"
-        "- Color Trading Rules\n"
-        "- Market Uchhal aur Giravat\n"
-        "- Hot Numbers\n"
-        "- Panel aur User Help\n"
-        "- Stock Market & Technical Indicators (RSI, MACD)\n\n"
-        "Kisi bhi sawal ke liye seedhe type karein!"
+    await update.message.reply_text(
+        "💖 **100% Non-Copyright 3D Valentine Video Bot** 💖\n\n"
+        "मुझे कोई भी वैलेंटाइन शायरी, लव मैसेज या डायलॉग हिंदी में भेजें।\n"
+        "मैं आपके लिए एक शानदार 3D वैलेंटाइन कैरेक्टर वीडियो तैयार करूँगा।"
     )
-    await update.message.reply_text(welcome_text)
 
-async def handle_all_messages(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if not update.message or not update.message.text:
-        return
-    user_text = update.message.text
-    bot_reply = generate_response(user_text)
-    await update.message.reply_text(bot_reply)
 
-# ============================================================
-# 6. MAIN EXECUTION
-# ============================================================
+# टेक्स्ट मिलने पर Short / Long और Theme चुनना
+async def handle_prompt(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    context.user_data["user_text"] = update.message.text
+
+    keyboard = [
+        [
+            InlineKeyboardButton(
+                "📱 Valentine Reel (9:16)", callback_data="ratio_9:16"
+            ),
+            InlineKeyboardButton(
+                "🖥️ Valentine Long Video (16:9)", callback_data="ratio_16:9"
+            ),
+        ]
+    ]
+    reply_markup = InlineKeyboardMarkup(keyboard)
+
+    await update.message.reply_text(
+        "🌹 **वीडियो का फॉर्मेट चुनें:**", reply_markup=reply_markup
+    )
+
+
+# Video Generation Function
+async def process_video(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    await query.answer()
+
+    user_text = context.user_data.get("user_text", "Happy Valentine's Day!")
+    user_id = query.from_user.id
+    aspect_ratio = "9:16" if query.data == "ratio_9:16" else "16:9"
+
+    raw_video_path = f"raw_val_{user_id}.mp4"
+    audio_path = f"val_audio_{user_id}.mp3"
+    final_output_path = f"val_final_{user_id}.mp4"
+
+    status_msg = await query.edit_message_text(
+        "⏳ **3D Valentine वीडियो बन रहा है...**\n"
+        "✨ 100% Original 3D Character Rendering\n"
+        "🎙️ Hindi Love Voice-Over Creation\n"
+        "कृपया 1 से 2 मिनट इंतज़ार करें..."
+    )
+
+    try:
+        # 1. Hindi Voice जनरेट करना
+        tts = gTTS(text=user_text, lang="hi", slow=False)
+        tts.save(audio_path)
+
+        # 2. 100% Non-Copyright 3D Valentine AI Prompt
+        # इसमें Disney/Pixar/Marvel का नाम नहीं है ताकि कॉपीराइट स्ट्राइक न आए
+        ai_prompt = (
+            f"Original 3D animated character, cute romantic anime stylized avatar holding a glowing red heart, "
+            f"Valentine's Day romantic setting, soft glowing pink and red lighting, falling rose petals, "
+            f"Unreal Engine 5 render, 8k resolution, cinematic 3D CGI animation, expressive face, "
+            f"dialogue theme: {user_text}"
+        )
+
+        # 3. Replicate Video API कॉल
+        output = replicate.run(
+            "minimax/video-01",
+            input={
+                "prompt": ai_prompt,
+                "prompt_optimizer": True,
+            },
+        )
+
+        # 4. वीडियो डाउनलोड करना
+        video_res = requests.get(output)
+        with open(raw_video_path, "wb") as f:
+            f.write(video_res.content)
+
+        # 5. Audio और Video को मर्ज करना
+        video_clip = mp.VideoFileClip(raw_video_path)
+        audio_clip = mp.AudioFileClip(audio_path)
+
+        if audio_clip.duration > video_clip.duration:
+            video_clip = video_clip.loop(duration=audio_clip.duration)
+        else:
+            video_clip = video_clip.set_duration(audio_clip.duration)
+
+        final_video = video_clip.set_audio(audio_clip)
+        final_video.write_videofile(
+            final_output_path, codec="libx264", audio_codec="aac"
+        )
+
+        # 6. टेलीग्राम पर वीडियो भेजना
+        with open(final_output_path, "rb") as video_file:
+            await context.bot.send_video(
+                chat_id=query.message.chat_id,
+                video=video_file,
+                caption=f"❤️ **Valentine 3D Video Ready!**\n\n💌 *{user_text}*",
+            )
+
+        await status_msg.delete()
+
+    except Exception as e:
+        await context.bot.send_message(
+            chat_id=query.message.chat_id,
+            text=f"❌ वीडियो बनाने में समस्या आई: {str(e)}",
+        )
+
+    # 7. टेम्प फाइल्स क्लीन करना
+    finally:
+        for file in [raw_video_path, audio_path, final_output_path]:
+            if os.path.exists(file):
+                try:
+                    os.remove(file)
+                except Exception:
+                    pass
+
+
 def main():
-    token = BOT_TOKEN or os.environ.get("TELEGRAM_BOT_TOKEN", "")
-    if not token:
-        print("ERROR: BOT_TOKEN set nahi hai! Code me token dalein.")
-        return
+    # Flask Web सर्वर
+    Thread(target=run_web).start()
 
-    # Start Flask Web Server
-    keep_alive()
+    # Telegram Bot
+    bot_app = ApplicationBuilder().token(TELEGRAM_BOT_TOKEN).build()
 
-    # Build Application
-    application = Application.builder().token(token).build()
+    bot_app.add_handler(CommandHandler("start", start))
+    bot_app.add_handler(
+        MessageHandler(filters.TEXT & ~filters.COMMAND, handle_prompt)
+    )
+    bot_app.add_handler(CallbackQueryHandler(process_video))
 
-    # Handlers
-    application.add_handler(CommandHandler("start", start))
-    application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_all_messages))
+    print("Valentine Bot Running...")
+    bot_app.run_polling()
 
-    print("Bot bina kisi conflict ke chalu ho gaya hai...")
-    application.run_polling(drop_pending_updates=True)
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()
