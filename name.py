@@ -1,592 +1,207 @@
-import os
-import random
-from threading import Thread
-from flask import Flask
 import telebot
 from telebot import types
-
-# ----------------- 1. Render Keep-Alive Server -----------------
-app = Flask('')
-
-
-@app.route('/')
-def home():
-  return 'Telegram Bot is Online and Running!'
-
-
-def run():
-  app.run(host='0.0.0.0', port=8080)
-
-
-def keep_alive():
-  t = Thread(target=run)
-  t.daemon = True
-  t.start()
-
-
-keep_alive()
-
-# ----------------- 2. Bot Initialization -----------------
-BOT_TOKEN = os.environ.get(
-    'BOT_TOKEN', '8889254295:AAFh8bYuFP5qty19cpP7HMFlPZ39lMNiU80'
-)
-bot = telebot.TeleBot(BOT_TOKEN)
-
-# Games Storage
-ttt_games = {}
-guess_games = {}
-bb_games = {}
-pop_games = {}
-
-# ----------------- 3. Balloon Pop / Shooter Game -----------------
-BALLOON_TYPES = [
-    {'icon': '🎈', 'name': 'गुब्बारा', 'pts': 10, 'type': 'normal'},
-    {'icon': '🎈', 'name': 'गुब्बारा', 'pts': 10, 'type': 'normal'},
-    {'icon': '⭐', 'name': 'गोल्डन स्टार', 'pts': 30, 'type': 'bonus'},
-    {'icon': '💣', 'name': 'बम', 'pts': -20, 'type': 'bomb'},
-    {'icon': '💨', 'name': 'खाली', 'pts': 0, 'type': 'empty'},
-]
-
-
-def generate_pop_grid():
-  return [random.choice(BALLOON_TYPES) for _ in range(9)]
-
-
-def create_pop_markup(grid, score, shots_left, game_over=False):
-  markup = types.InlineKeyboardMarkup(row_width=3)
-  buttons = []
-  for i, item in enumerate(grid):
-    if game_over:
-      btn_text = item['icon']
-    else:
-      btn_text = item['icon'] if item.get('revealed') else '🎯'
-    buttons.append(
-        types.InlineKeyboardButton(text=btn_text, callback_data=f'pop_hit_{i}')
-    )
-
-  for r in range(0, 9, 3):
-    markup.row(*buttons[r : r + 3])
-
-  markup.row(
-      types.InlineKeyboardButton(
-          text='🔄 नया गेम शुरू करें', callback_data='pop_restart'
-      )
-  )
-  return markup
-
-
-@bot.message_handler(commands=['pop', 'balloon', 'balloonshooter'])
-def start_balloon_game(message):
-  chat_id = message.chat.id
-  grid = generate_pop_grid()
-  pop_games[chat_id] = {
-      'grid': grid,
-      'score': 0,
-      'shots_left': 6,
-      'game_over': False,
-  }
-  markup = create_pop_markup(grid, 0, 6)
-  bot.send_message(
-      chat_id,
-      '🎈 **Balloon Pop Shooter शुरू हो गया!** 🎯\n\n'
-      '• 🎯 पर क्लिक करके गुब्बारा फोड़ो!\n'
-      '• 🎈 गुब्बारा = +10 अंक\n'
-      '• ⭐ स्टार = +30 अंक\n'
-      '• 💣 बम = -20 अंक और गेम ओवर!\n\n'
-      '🏹 **निशाने बचे:** 6 | 🏆 **स्कोर:** 0',
-      reply_markup=markup,
-      parse_mode='Markdown',
-  )
-
-
-@bot.callback_query_handler(func=lambda call: call.data.startswith('pop_'))
-def handle_balloon_action(call):
-  chat_id = call.message.chat.id
-  if chat_id not in pop_games:
-    bot.answer_callback_query(
-        call.id, 'नया गेम खेलने के लिए /pop टाइप करें दोस्त!'
-    )
-    return
-
-  game = pop_games[chat_id]
-  data = call.data
-
-  if data == 'pop_restart':
-    grid = generate_pop_grid()
-    game['grid'] = grid
-    game['score'] = 0
-    game['shots_left'] = 6
-    game['game_over'] = False
-    markup = create_pop_markup(grid, 0, 6)
-    bot.edit_message_text(
-        '🎈 **नया Balloon Pop Game!**\n🏹 **निशाने बचे:** 6 | 🏆 **स्कोर:** 0',
-        chat_id=chat_id,
-        message_id=call.message.message_id,
-        reply_markup=markup,
-        parse_mode='Markdown',
-    )
-    bot.answer_callback_query(call.id, 'नया गेम तैयार!')
-    return
-
-  if game['game_over']:
-    bot.answer_callback_query(
-        call.id, 'गेम खत्म हो चुका है! रीस्टार्ट बटन दबाएं।'
-    )
-    return
-
-  idx = int(data.split('_')[2])
-  item = game['grid'][idx]
-
-  if item.get('revealed'):
-    bot.answer_callback_query(call.id, 'यह जगह पहले ही फोड़ चुके हैं!')
-    return
-
-  item['revealed'] = True
-  game['shots_left'] -= 1
-
-  alert_text = ''
-  if item['type'] == 'bomb':
-    game['score'] += item['pts']
-    game['game_over'] = True
-    alert_text = '💥 बूम! बम फूट गया! (-20 अंक)'
-  elif item['type'] == 'bonus':
-    game['score'] += item['pts']
-    alert_text = '⭐ लकी स्टार! +30 अंक!'
-  elif item['type'] == 'normal':
-    game['score'] += item['pts']
-    alert_text = '🎈 गुब्बारा फूट गया! +10 अंक!'
-  else:
-    alert_text = '💨 खाली निकला!'
-
-  if game['shots_left'] <= 0:
-    game['game_over'] = True
-
-  if game['game_over']:
-    msg = (
-        f"🏁 **गेम समाप्त!**\n{alert_text}\n🏆 **अंतिम स्कोर:** {game['score']}\n"
-        'दोबारा खेलने के लिए नीचे बटन दबाएं।'
-    )
-  else:
-    msg = (
-        f'🎈 **Balloon Pop Shooter!**\n{alert_text}\n'
-        f"🏹 **निशाने बचे:** {game['shots_left']} | 🏆 **स्कोर:** {game['score']}"
-    )
-
-  markup = create_pop_markup(
-      game['grid'], game['score'], game['shots_left'], game['game_over']
-  )
-  bot.edit_message_text(
-      msg,
-      chat_id=chat_id,
-      message_id=call.message.message_id,
-      reply_markup=markup,
-      parse_mode='Markdown',
-  )
-  bot.answer_callback_query(call.id, alert_text)
-
-
-# ----------------- 4. Block Blast Game -----------------
-BLOCK_SHAPES = [
-    {'name': '🟩 1x1', 'size': 1, 'pts': 10},
-    {'name': '🟧 1x2', 'size': 2, 'pts': 20},
-    {'name': '🟨 1x3', 'size': 3, 'pts': 30},
-    {'name': '🟦 2x2', 'size': 4, 'pts': 40},
-]
-
-
-def create_bb_markup(grid, score, available_blocks):
-  markup = types.InlineKeyboardMarkup(row_width=4)
-  grid_buttons = []
-  for i in range(16):
-    text = '🟩' if grid[i] == 1 else '⬜'
-    grid_buttons.append(
-        types.InlineKeyboardButton(text=text, callback_data=f'bb_grid_{i}')
-    )
-
-  for r in range(0, 16, 4):
-    markup.row(*grid_buttons[r : r + 4])
-
-  block_buttons = []
-  for idx, block in enumerate(available_blocks):
-    block_buttons.append(
-        types.InlineKeyboardButton(
-            text=f"{block['name']} (+{block['pts']})",
-            callback_data=f'bb_place_{idx}',
-        )
-    )
-  if block_buttons:
-    markup.row(*block_buttons)
-
-  markup.row(
-      types.InlineKeyboardButton(
-          text='🔄 New Game', callback_data='bb_restart'
-      )
-  )
-  return markup
-
-
-def clear_lines(grid):
-  lines_cleared = 0
-  for r in range(4):
-    if all(grid[r * 4 + c] == 1 for c in range(4)):
-      lines_cleared += 1
-      for c in range(4):
-        grid[r * 4 + c] = 0
-  for c in range(4):
-    if all(grid[r * 4 + c] == 1 for r in range(4)):
-      lines_cleared += 1
-      for r in range(4):
-        grid[r * 4 + c] = 0
-  return lines_cleared * 100
-
-
-@bot.message_handler(commands=['blast', 'blockblast'])
-def start_block_blast(message):
-  chat_id = message.chat.id
-  blocks = random.sample(BLOCK_SHAPES, 2)
-  bb_games[chat_id] = {
-      'grid': [0] * 16,
-      'score': 0,
-      'blocks': blocks,
-      'selected': None,
-  }
-  markup = create_bb_markup([0] * 16, 0, blocks)
-  bot.send_message(
-      chat_id,
-      '💥 **Block Blast गेम शुरू हो गया!**\n\n'
-      '• नीचे से ब्लॉक चुनें और ग्रिड (⬜) पर लगाएं।\n'
-      '• पूरी लाइन भरने पर 100 बोनस पॉइंट्स मिलेंगे!\n'
-      '🏆 **Score:** 0',
-      reply_markup=markup,
-      parse_mode='Markdown',
-  )
-
-
-@bot.callback_query_handler(func=lambda call: call.data.startswith('bb_'))
-def handle_block_blast_action(call):
-  chat_id = call.message.chat.id
-  if chat_id not in bb_games:
-    bot.answer_callback_query(call.id, 'नया गेम शुरू करने के लिए /blast दबाएं।')
-    return
-
-  game = bb_games[chat_id]
-  data = call.data
-
-  if data == 'bb_restart':
-    game['grid'] = [0] * 16
-    game['score'] = 0
-    game['blocks'] = random.sample(BLOCK_SHAPES, 2)
-    game['selected'] = None
-    markup = create_bb_markup(game['grid'], game['score'], game['blocks'])
-    bot.edit_message_text(
-        '💥 **Block Blast New Game!**\n🏆 **Score:** 0',
-        chat_id=chat_id,
-        message_id=call.message.message_id,
-        reply_markup=markup,
-        parse_mode='Markdown',
-    )
-    bot.answer_callback_query(call.id, 'New Game Started!')
-    return
-
-  if data.startswith('bb_place_'):
-    idx = int(data.split('_')[2])
-    game['selected'] = idx
-    bot.answer_callback_query(
-        call.id,
-        f"चुना गया: {game['blocks'][idx]['name']}! अब खाली ⬜ ब्लॉक पर दबाएं।",
-    )
-    return
-
-  if data.startswith('bb_grid_'):
-    cell = int(data.split('_')[2])
-    if game['selected'] is None:
-      bot.answer_callback_query(
-          call.id, '⚠️ पहले नीचे से कोई ब्लॉक सेलेक्ट करें!'
-      )
-      return
-
-    if game['grid'][cell] == 1:
-      bot.answer_callback_query(call.id, '⚠️ यह जगह पहले से भरी है!')
-      return
-
-    block = game['blocks'].pop(game['selected'])
-    game['selected'] = None
-    game['grid'][cell] = 1
-    game['score'] += block['pts']
-
-    bonus = clear_lines(game['grid'])
-    game['score'] += bonus
-
-    if not game['blocks']:
-      game['blocks'] = random.sample(BLOCK_SHAPES, 2)
-
-    msg = f'💥 **Block Blast!**\n'
-    if bonus > 0:
-      msg += f'🔥 **LINE BLAST! +{bonus} Bonus!**\n'
-    msg += f"🏆 **Score:** {game['score']}"
-
-    markup = create_bb_markup(game['grid'], game['score'], game['blocks'])
-    bot.edit_message_text(
-        msg,
-        chat_id=chat_id,
-        message_id=call.message.message_id,
-        reply_markup=markup,
-        parse_mode='Markdown',
-    )
-    bot.answer_callback_query(call.id)
-
-
-# ----------------- 5. Tic-Tac-Toe Game -----------------
-def get_empty_board():
-  return [' '] * 9
-
-
-def create_board_markup(board):
-  markup = types.InlineKeyboardMarkup(row_width=3)
-  buttons = []
-  for i in range(9):
-    text = board[i] if board[i] != ' ' else '⬜'
-    buttons.append(
-        types.InlineKeyboardButton(text=text, callback_data=f'ttt_{i}')
-    )
-  markup.add(*buttons)
-  return markup
-
-
-def check_winner(board):
-  win_combos = [
-      [0, 1, 2],
-      [3, 4, 5],
-      [6, 7, 8],
-      [0, 3, 6],
-      [1, 4, 7],
-      [2, 5, 8],
-      [0, 4, 8],
-      [2, 4, 6],
-  ]
-  for combo in win_combos:
-    if board[combo[0]] == board[combo[1]] == board[combo[2]] != ' ':
-      return board[combo[0]]
-  if ' ' not in board:
-    return 'Draw'
-  return None
-
-
-@bot.message_handler(commands=['game', 'tictactoe'])
-def start_tictactoe(message):
-  chat_id = message.chat.id
-  ttt_games[chat_id] = {'board': get_empty_board(), 'turn': '❌'}
-  markup = create_board_markup(ttt_games[chat_id]['board'])
-  bot.send_message(
-      chat_id,
-      '🎮 Tic-Tac-Toe शुरू हो गया दोस्त!\nतुम्हारी चाल: ❌',
-      reply_markup=markup,
-  )
-
-
-@bot.callback_query_handler(func=lambda call: call.data.startswith('ttt_'))
-def handle_tictactoe_move(call):
-  chat_id = call.message.chat.id
-  if chat_id not in ttt_games:
-    bot.answer_callback_query(call.id, 'नया गेम शुरू करने के लिए /game भेजें!')
-    return
-
-  index = int(call.data.split('_')[1])
-  game = ttt_games[chat_id]
-  board = game['board']
-  turn = game['turn']
-
-  if board[index] != ' ':
-    bot.answer_callback_query(call.id, 'यह जगह भरी हुई है!')
-    return
-
-  board[index] = turn
-  result = check_winner(board)
-
-  if result:
-    markup = create_board_markup(board)
-    text = (
-        '🤝 मैच ड्रॉ हो गया दोस्त!'
-        if result == 'Draw'
-        else f'🎉 प्लेयर {result} जीत गया!'
-    )
-    text += ' दोबारा खेलने के लिए /game भेजें।'
-    del ttt_games[chat_id]
-    bot.edit_message_text(
-        text,
-        chat_id=chat_id,
-        message_id=call.message.message_id,
-        reply_markup=markup,
-    )
-    bot.answer_callback_query(call.id, 'खेल खत्म!')
-  else:
-    game['turn'] = '⭕' if turn == '❌' else '❌'
-    markup = create_board_markup(board)
-    bot.edit_message_text(
-        f"🎮 Tic-Tac-Toe\nअगली चाल: {game['turn']}",
-        chat_id=chat_id,
-        message_id=call.message.message_id,
-        reply_markup=markup,
-    )
-    bot.answer_callback_query(call.id)
-
-
-# ----------------- 6. Number Guess Game -----------------
-@bot.message_handler(commands=['guess'])
-def start_guess_game(message):
-  chat_id = message.chat.id
-  guess_games[chat_id] = random.randint(1, 20)
-  bot.send_message(
-      chat_id,
-      '🎯 मैंने 1 से 20 के बीच एक नंबर सोचा है!\nनंबर लिखकर भेजो और बताओ कौन सा'
-      ' है।',
-  )
-
-
-# ----------------- 7. Welcome & Help Command -----------------
+import random
+
+# Apna Telegram Bot Token yahan dalein
+TOKEN = "YOUR_TELEGRAM_BOT_TOKEN"
+bot = telebot.TeleBot(TOKEN)
+
+games = {
+    'ttt': {}, 'carrom': {}, 'ghost': {}, 'hill': {}
+}
+
+# ----------------- 1. Professional Tic-Tac-Toe (Smart AI) -----------------
+def get_ttt_kb(board):
+    kb = types.InlineKeyboardMarkup(row_width=3)
+    buttons = [
+        types.InlineKeyboardButton(board[i] if board[i] != " " else "⬜", callback_data=f"ttt_{i}") 
+        for i in range(9)
+    ]
+    kb.add(*buttons)
+    return kb
+
+def check_win(b):
+    wins = [(0,1,2), (3,4,5), (6,7,8), (0,3,6), (1,4,7), (2,5,8), (0,4,8), (2,4,6)]
+    for x, y, z in wins:
+        if b[x] == b[y] == b[z] and b[x] != " ":
+            return b[x]
+    return "Tie" if " " not in b else None
+
+# Smart AI (Winning / Blocking Logic)
+def get_smart_move(b):
+    empty = [i for i, v in enumerate(b) if v == " "]
+    # 1. Jeetne ki koshish karein
+    for move in empty:
+        temp = list(b)
+        temp[move] = "⭕"
+        if check_win(temp) == "⭕":
+            return move
+    # 2. Player ko block karein
+    for move in empty:
+        temp = list(b)
+        temp[move] = "❌"
+        if check_win(temp) == "❌":
+            return move
+    # 3. Center le ya random move
+    if 4 in empty:
+        return 4
+    return random.choice(empty)
+
+# ----------------- Commands -----------------
 @bot.message_handler(commands=['start', 'help'])
-def send_welcome(message):
-  name = message.from_user.first_name or 'भाई'
-  welcome_msg = (
-      f'🙏 नमस्ते {name} भाई! आपका दिल से बहुत स्वागत है।\n\n'
-      '🎮 **मजेदार गेम्स खेलें:**\n'
-      '• 🎈 Balloon Shooter 👉 /pop\n'
-      '• 💥 Block Blast 👉 /blast\n'
-      '• ❌ Tic-Tac-Toe 👉 /game\n'
-      '• 🎯 Number Guess 👉 /guess\n\n'
-      '📊 **हेल्प और एनालिसिस:**\n'
-      '• कोडिंग, गिरावट (Market Fall), 40 का लेवल\n'
-      '• कलर ट्रेडिंग (Color Trading) गाइड\n'
-      '• मोटिवेशन और ज़िंदगी की बातें\n\n'
-      'कुछ भी पूछना हो बस टाइप करके भेज दो दोस्त!'
-  )
-  bot.reply_to(message, welcome_msg)
+def help_cmd(message):
+    txt = (
+        "👋 *नमस्ते दोस्त!*\n\n"
+        "🎮 *गेम्स लिस्ट:*\n"
+        "• /game - प्रो टिक-टैक-टो (Smart AI)\n"
+        "• /hill - हिल क्लाइम्ब रेसिंग\n"
+        "• /carrom - कैरम बोर्ड AI\n"
+        "• /ghost - हॉरर एस्केप\n\n"
+        "📈 *ट्रेडिंग और चैट:*\n"
+        "मुझसे कुछ भी पूछें जैसे 'colour trading kya hai', 'red ya green', 'market upar ya niche'!"
+    )
+    bot.reply_to(message, txt, parse_mode="Markdown")
 
+@bot.message_handler(commands=['game'])
+def ttt(m):
+    games['ttt'][m.chat.id] = [" "] * 9
+    bot.send_message(m.chat.id, "🎮 *Tic-Tac-Toe Pro (AI Battle)*\n\nAap: ❌ | Bot: ⭕\nApna move chuniye:", reply_markup=get_ttt_kb(games['ttt'][m.chat.id]), parse_mode="Markdown")
 
-# ----------------- 8. Smart Chat Handler -----------------
+@bot.message_handler(commands=['hill'])
+def hill_cmd(m):
+    games['hill'][m.chat.id] = {"dist": 0, "fuel": 100}
+    bot.send_message(
+        m.chat.id,
+        "🚗 *Hill Climb Racing*\n\nदूरी: 0m | फ्यूल: 100%\nगाड़ी चलाओ और फ्यूल खत्म होने से बचो!",
+        reply_markup=get_hill_kb(),
+        parse_mode="Markdown"
+    )
+
+def get_hill_kb():
+    kb = types.InlineKeyboardMarkup()
+    kb.row(
+        types.InlineKeyboardButton("⚡ Race (Speed)", callback_data="hill_race"),
+        types.InlineKeyboardButton("⛽ Collect Fuel", callback_data="hill_fuel")
+    )
+    return kb
+
+@bot.message_handler(commands=['carrom'])
+def carrom(m):
+    games['carrom'][m.chat.id] = {"user": 0, "ai": 0}
+    bot.send_message(m.chat.id, "🎯 *कैरम बोर्ड मुकाबला*", reply_markup=types.InlineKeyboardMarkup().add(types.InlineKeyboardButton("🎯 स्ट्राइक मारो", callback_data="carrom_strike")), parse_mode="Markdown")
+
+@bot.message_handler(commands=['ghost'])
+def ghost(m):
+    games['ghost'][m.chat.id] = 10
+    bot.send_message(m.chat.id, "👻 *भूत गेम*: भूत 10 कदम दूर है!", reply_markup=types.InlineKeyboardMarkup().add(types.InlineKeyboardButton("🏃 भागो!", callback_data="ghost_run")), parse_mode="Markdown")
+
+# ----------------- Callbacks Handler -----------------
+@bot.callback_query_handler(func=lambda call: True)
+def callback(call):
+    cid = call.message.chat.id
+
+    # Tic-Tac-Toe Pro
+    if call.data.startswith("ttt_"):
+        idx = int(call.data.split("_")[1])
+        board = games['ttt'].get(cid)
+        if board and board[idx] == " ":
+            board[idx] = "❌"
+            res = check_win(board)
+            if not res:
+                ai_move = get_smart_move(board)
+                board[ai_move] = "⭕"
+                res = check_win(board)
+
+            if res:
+                msg = "🏆 मुबारक हो! आप जीत गए!" if res == "❌" else ("🤖 Bot जीत गया!" if res == "⭕" else "🤝 मैच टाई हो गया!")
+                bot.edit_message_text(f"{msg}\n\nफिर खेलने के लिए /game दबाएं।", cid, call.message.message_id)
+            else:
+                bot.edit_message_text("🎮 *Tic-Tac-Toe Pro*\n\nआप: ❌ | Bot: ⭕\nअगली चाल चलें:", cid, call.message.message_id, reply_markup=get_ttt_kb(board), parse_mode="Markdown")
+        bot.answer_callback_query(call.id)
+
+    # Hill Climb Racing
+    elif call.data.startswith("hill_"):
+        st = games['hill'].get(cid, {"dist": 0, "fuel": 100})
+        action = call.data.split("_")[1]
+
+        if action == "race":
+            st["dist"] += random.randint(15, 30)
+            st["fuel"] -= random.randint(10, 20)
+        elif action == "fuel":
+            st["fuel"] = min(100, st["fuel"] + random.randint(25, 40))
+            st["dist"] += 5
+
+        # Check conditions
+        if st["fuel"] <= 0:
+            bot.edit_message_text(f"💥 *कार का तेल खत्म! दुर्घटनाग्रस्त!*\nकुल दूरी तय की: {st['dist']}m\nफिर खेलने के लिए /hill दबाएं।", cid, call.message.message_id, parse_mode="Markdown")
+        elif st["dist"] >= 200:
+            bot.edit_message_text(f"🏁 *शानदार जीत!*\nआप पहाड़ की चोटी पर पहुँच गए (200m+ दूरी पार)! 🏆", cid, call.message.message_id, parse_mode="Markdown")
+        else:
+            games['hill'][cid] = st
+            bot.edit_message_text(f"🚗 *Hill Climb Racing*\n\nदूरी: {st['dist']}m | फ्यूल: {st['fuel']}%\nसावधानी से आगे बढ़ें!", cid, call.message.message_id, reply_markup=get_hill_kb(), parse_mode="Markdown")
+        bot.answer_callback_query(call.id)
+
+    # Carrom AI Logic
+    elif call.data == "carrom_strike":
+        st = games['carrom'].get(cid, {"user": 0, "ai": 0})
+        if random.random() > 0.4: st["user"] += 1
+        if random.random() > 0.4: st["ai"] += 1
+        
+        if st["user"] >= 5:
+            bot.edit_message_text("🏆 *आप कैरम मैच जीत गए!*", cid, call.message.message_id, parse_mode="Markdown")
+        elif st["ai"] >= 5:
+            bot.edit_message_text("🤖 *कंप्यूटर कैरम मैच जीत गया!*", cid, call.message.message_id, parse_mode="Markdown")
+        else:
+            bot.edit_message_text(f"🎯 *कैरम मुकाबला:*\n👤 आपका स्कोर: {st['user']}\n🤖 कंप्यूटर: {st['ai']}", cid, call.message.message_id, reply_markup=types.InlineKeyboardMarkup().add(types.InlineKeyboardButton("🎯 स्ट्राइक मारो", callback_data="carrom_strike")), parse_mode="Markdown")
+        bot.answer_callback_query(call.id)
+
+    # Ghost Game
+    elif call.data == "ghost_run":
+        dist = games['ghost'].get(cid, 10) - 1
+        if dist <= 0:
+            bot.edit_message_text("💀 *भूत ने आपको पकड़ लिया! गेम ओवर।* 🪦", cid, call.message.message_id, parse_mode="Markdown")
+        else:
+            games['ghost'][cid] = dist
+            bot.edit_message_text(f"👻 *भूत गेम*: भूत केवल {dist} कदम दूर है! भागते रहो!", cid, call.message.message_id, reply_markup=types.InlineKeyboardMarkup().add(types.InlineKeyboardButton("🏃 भागो!", callback_data="ghost_run")), parse_mode="Markdown")
+        bot.answer_callback_query(call.id)
+
+# ----------------- Smart Chat Handler (Hindi / Hinglish / Trading) -----------------
 @bot.message_handler(func=lambda message: True)
 def handle_chat(message):
-  chat_id = message.chat.id
-  text = message.text.strip().lower() if message.text else ''
-  name = message.from_user.first_name or 'दोस्त'
+    text = message.text.lower()
 
-  # Number Guess Check
-  if chat_id in guess_games and text.isdigit():
-    num = int(text)
-    secret = guess_games[chat_id]
-    if num == secret:
-      del guess_games[chat_id]
-      bot.reply_to(
-          message,
-          f'🎉 सही पकड़े हैं {name} भाई! नंबर {secret} ही था! दोबारा खेलने के'
-          ' लिए /guess दबाएं।',
-      )
-      return
-    elif num < secret:
-      bot.reply_to(message, f'थोड़ा बड़ा नंबर सोचो {name} भाई! 📈')
-      return
+    # Colour Trading Explanation
+    if any(k in text for k in ["color trading", "colour trading", "color trade", "colour trade", "trading kya"]):
+        info = (
+            "📊 *कलर ट्रेडिंग क्या है?*\n\n"
+            "कलर ट्रेडिंग एक ऑनलाइन प्रेडिक्शन प्लेटफॉर्म है जहाँ आपको अनुमान लगाना होता है कि अगले राउंड में कौन सा रंग (Red, Green, Violet) या नंबर आएगा।\n\n"
+            "⚠️ *सावधानी:* यह पूरी तरह से वित्तीय जोखिम और संभावनाओं (Probability) पर निर्भर करता है। इसे सोच-समझकर खेलें।"
+        )
+        bot.reply_to(message, info, parse_mode="Markdown")
+
+    # Color Prediction Logic
+    elif any(k in text for k in ["red", "blue", "green", "lal", "hara", "rang", "color", "colour"]):
+        color = random.choice(["लाल (🔴 RED)", "हरा (🟢 GREEN)", "बैंगनी (🟣 VIOLET)"])
+        bot.reply_to(message, f"📊 *ट्रेडिंग सिग्नल:* अगले राउंड में **{color}** आने की सबसे ज्यादा संभावना है।")
+
+    # Direction Prediction
+    elif any(k in text for k in ["upar", "niche", "up", "down", "rise", "fall", "market"]):
+        direction = random.choice(["ऊपर (📈 UP/CALL)", "नीचे (📉 DOWN/PUT)"])
+        pct = random.randint(75, 92)
+        bot.reply_to(message, f"📈 *मार्केट ट्रेंड:* मार्केट के **{direction}** जाने के {pct}% चांस हैं।")
+
+    # Number Prediction
+    elif any(k in text for k in ["number", "no", "num", "ank", "1", "2", "3", "4", "5", "6", "7", "8", "9"]):
+        num = random.randint(0, 9)
+        bot.reply_to(message, f"🎯 *नंबर प्रेडिक्शन:* अगला लकी नंबर **{num}** हो सकता है!")
+
+    # Hinglish & Hindi Casual Conversations
+    elif any(k in text for k in ["hi", "hello", "kaise ho", "kya haal", "bhai", "namaste", "kem cho"]):
+        bot.reply_to(message, "नमस्ते भाई! सब बढ़िया है। बताओ आज क्या खेलना है या कौन सी ट्रेडिंग टिप चाहिए?")
+
     else:
-      bot.reply_to(message, f'थोड़ा छोटा नंबर सोचो {name} भाई! 📉')
-      return
+        bot.reply_to(message, "अरे दोस्त! मैं समझ गया। आप /game, /hill, /carrom खेल सकते हैं या मुझसे 'colour trading kya hai', 'red ya green' जैसे सवाल पूछ सकते हैं!")
 
-  # Greetings
-  if any(
-      greet in text
-      for greet in [
-          'hi',
-          'hello',
-          'hey',
-          'namaste',
-          'pranam',
-          'hlo',
-          'ram ram',
-          'kaise ho',
-      ]
-  ):
-    reply = (
-        f'अरे नमस्ते {name} भाई! ❤️\n\n'
-        'सब बढ़िया? बताओ आज क्या नया चल रहा है? Balloon Pop (/pop) खेलना है या'
-        ' ट्रेडिंग/कोडिंग पर बात करनी है?'
-    )
-
-  # Coding & Girawat / 40
-  elif any(
-      k in text
-      for k in [
-          'cod',
-          'coding',
-          'koding',
-          'girawat',
-          'girvat',
-          'downfall',
-          '40',
-          'market',
-      ]
-  ):
-    reply = (
-        f'अरे {name} भाई, कोडिंग और मार्केट दोनों का हिसाब अपने पास है! 💻📉\n\n'
-        '• **कोडिंग टिप:** लॉजिक मजबूत रखो और एरर से मत घबराओ।\n'
-        '• **गिरावट और 40 लेवल:** जब भी गिरावट आए या चार्ट 40 के सपोर्ट पर आए,'
-        ' स्टॉप-लॉस जरूर लगाओ। बिना सोचे-समझे ट्रेड मत लेना!\n'
-        '• **धैर्य:** शांति से काम लोगे तो हमेशा जीतोगे!'
-    )
-
-  # Color Trading
-  elif any(
-      k in text
-      for k in [
-          'color',
-          'colour',
-          'kolor',
-          'trad',
-          'trading',
-          'traid',
-          'tradin',
-          'red',
-          'green',
-      ]
-  ):
-    reply = (
-        f'बिल्कुल {name} भाई, कलर ट्रेडिंग समझ लो 📈🎨:\n\n'
-        '• इसमें रेड, ग्रीन और वॉयलेट पर प्रेडिक्शन होता है।\n'
-        '• **वार्निंग:** यह बहुत हाई-रिस्क होता है, इसलिए लालच में आकर बड़ा पैसा'
-        ' कभी न लगाएं।\n'
-        '• हमेशा छोटे बजट और समझदारी से ही खेलें!'
-    )
-
-  # Life / Motivation
-  elif any(
-      k in text
-      for k in ['zindagi', 'jindagi', 'life', 'jeevan', 'kismat', 'tension']
-  ):
-    reply = (
-        f'सुनो {name} भाई, ज़िंदगी बहुत अनमोल है! ✨\n\n'
-        'उतार-चढ़ाव तो लगे रहते हैं। बस सीखते रहो, मुस्कुराते रहो और मेहनत'
-        ' करते रहो। तुम्हारा भाई हमेशा साथ है!'
-    )
-
-  # Balloon or pop mention
-  elif any(k in text for k in ['pop', 'balloon', 'ballon', 'shooter', 'fodo']):
-    reply = (
-        f'🎈 अरे {name} भाई, गुब्बारे फोड़ने हैं? तुरंत /pop दबाओ और गेम शुरू'
-        ' करो!'
-    )
-
-  # Fallback
-  else:
-    reply = (
-        f'अरे {name} भाई, मुझे आपका मैसेज मिल गया! 😊\n\n'
-        'आप कोडिंग, कलर ट्रेडिंग, गिरावट/40 पूछ सकते हैं या फिर गेम खेल सकते हैं:\n'
-        '• /pop - Balloon Shooter\n'
-        '• /blast - Block Blast\n'
-        '• /game - Tic-Tac-Toe\n'
-        '• /guess - Number Guessing'
-    )
-
-  bot.reply_to(message, reply)
-
-
-# ----------------- 9. Polling Execution -----------------
 if __name__ == '__main__':
-  print('Telegram Bot is starting polling...')
-  bot.infinity_polling()
+    print("बॉट सफलता पूर्वक चालू हो गया...")
+    bot.infinity_polling()
