@@ -2,7 +2,7 @@ import telebot
 from telebot import types
 import random
 
-TOKEN = "YOUR_TELEGRAM_BOT_TOKEN"
+TOKEN = "8889254295:AAFh8bYuFP5qty19cpP7HMFlPZ39lMNiU80"
 bot = telebot.TeleBot(TOKEN)
 
 # गेम डेटा स्टोर
@@ -12,6 +12,7 @@ hill_games = {}
 subway_games = {}
 rc_games = {}
 pizza_games = {}
+ludo_games = {}
 
 # ----------------- Helper: Tic-Tac-Toe Keyboard -----------------
 def get_ttt_keyboard(board):
@@ -39,12 +40,43 @@ def start_ttt(message):
     ttt_games[chat_id] = [" "] * 9
     bot.send_message(
         chat_id, 
-        "❌ **टिक-टैक-टो मुकाबला (AI के खिलाफ)** ⭕\nआप **X** हैं और बॉट **O** है। अपनी बारी चलें:", 
+        "❌ **टिक-टैक-टो मुकाबला (AI कंप्यूटर के खिलाफ)** ⭕\nआप **X** हैं और AI बॉट **O** है। अपनी बारी चलें:", 
         reply_markup=get_ttt_keyboard(ttt_games[chat_id]),
         parse_mode="Markdown"
     )
 
-# ----------------- 2. Hill Climb Racing -----------------
+# ----------------- 2. Ludo vs AI -----------------
+@bot.message_handler(commands=['ludo'])
+def start_ludo(message):
+    chat_id = message.chat.id
+    ludo_games[chat_id] = {"user_pos": 0, "ai_pos": 0}
+    kb = types.InlineKeyboardMarkup(row_width=1)
+    kb.add(types.InlineKeyboardButton("🎲 पासा फेंकें (Roll Dice)", callback_data="ludo_roll"))
+    bot.send_message(
+        chat_id,
+        "🎲 **लूडो गेम (AI कंप्यूटर के खिलाफ)** 🔴🟢\n\n"
+        "🎯 लक्ष्य: 50 पॉइंट पर पहुंचना\n"
+        "👤 आपकी स्थिति: 0\n"
+        "🤖 AI बॉट स्थिति: 0\n\n"
+        "पासा फेंकने के लिए बटन दबाएं!",
+        reply_markup=kb,
+        parse_mode="Markdown"
+    )
+
+# ----------------- 3. Vidmate Opener -----------------
+@bot.message_handler(commands=['vidmate'])
+def open_vidmate(message):
+    kb = types.InlineKeyboardMarkup(row_width=1)
+    kb.add(types.InlineKeyboardButton("🚀 Vidmate ऐप खोलें / डाउनलोड करें", url="https://www.vidmateapp.com/"))
+    bot.send_message(
+        message.chat.id,
+        "🎬 **Vidmate वीडियो डाउनलोडर** 📥\n\n"
+        "Vidmate खोलने या डाउनलोड करने के लिए नीचे दिए गए बटन पर क्लिक करें:",
+        reply_markup=kb,
+        parse_mode="Markdown"
+    )
+
+# ----------------- 4. Hill Climb Racing -----------------
 @bot.message_handler(commands=['climb'])
 def start_hill_climb(message):
     chat_id = message.chat.id
@@ -61,7 +93,7 @@ def start_hill_climb(message):
         parse_mode="Markdown"
     )
 
-# ----------------- 3. Subway Surfers Game -----------------
+# ----------------- 5. Subway Surfers Game -----------------
 @bot.message_handler(commands=['subway'])
 def start_subway(message):
     chat_id = message.chat.id
@@ -79,7 +111,7 @@ def start_subway(message):
         parse_mode="Markdown"
     )
 
-# ----------------- 4. Remote Control (RC Car) Game -----------------
+# ----------------- 6. Remote Control (RC Car) Game -----------------
 @bot.message_handler(commands=['rc'])
 def start_rc(message):
     chat_id = message.chat.id
@@ -97,7 +129,7 @@ def start_rc(message):
         parse_mode="Markdown"
     )
 
-# ----------------- 5. Pizza Tower Game -----------------
+# ----------------- 7. Pizza Tower Game -----------------
 @bot.message_handler(commands=['pizza'])
 def start_pizza(message):
     chat_id = message.chat.id
@@ -114,14 +146,14 @@ def start_pizza(message):
         parse_mode="Markdown"
     )
 
-# ----------------- 6. Number Guess Game -----------------
+# ----------------- 8. Number Guess Game -----------------
 @bot.message_handler(commands=['guess'])
 def start_guess_game(message):
     chat_id = message.chat.id
     guess_games[chat_id] = random.randint(1, 20)
     bot.send_message(chat_id, "🎯 मैंने 1 से 20 के बीच एक नंबर सोचा है!\nनंबर लिखकर भेजो और बताओ कौन सा है।")
 
-# ----------------- 7. Balloon Pop & Block Blast -----------------
+# ----------------- 9. Balloon Pop & Block Blast -----------------
 @bot.message_handler(commands=['pop'])
 def start_pop(message):
     kb = types.InlineKeyboardMarkup(row_width=3)
@@ -141,13 +173,44 @@ def start_blast(message):
     )
     bot.send_message(message.chat.id, "💥 ब्लॉक ब्लास्ट गेम:", reply_markup=kb)
 
-# ----------------- 8. Callback Query Handler -----------------
+# ----------------- 10. Callback Query Handler -----------------
 @bot.callback_query_handler(func=lambda call: True)
 def callback_handler(call):
     chat_id = call.message.chat.id
 
-    # Tic-Tac-Toe
-    if call.data.startswith("ttt_"):
+    # Ludo vs AI
+    if call.data == "ludo_roll":
+        st = ludo_games.get(chat_id, {"user_pos": 0, "ai_pos": 0})
+        user_dice = random.randint(1, 6)
+        ai_dice = random.randint(1, 6)
+
+        st["user_pos"] += user_dice
+        st["ai_pos"] += ai_dice
+
+        if st["user_pos"] >= 50:
+            bot.edit_message_text(f"🏆 **बधाई हो! आप लूडो जीत गए!** 👑\n\nअंतिम स्कोर:\n👤 आप: {st['user_pos']}\n🤖 AI: {st['ai_pos']}\n\nदोबारा खेलने के लिए /ludo दबाएं।", chat_id, call.message.message_id, parse_mode="Markdown")
+            ludo_games.pop(chat_id, None)
+        elif st["ai_pos"] >= 50:
+            bot.edit_message_text(f"🤖 **AI बॉट लूडो जीत गया!** 🎲\n\nअंतिम स्कोर:\n👤 आप: {st['user_pos']}\n🤖 AI: {st['ai_pos']}\n\nदोबारा खेलने के लिए /ludo दबाएं।", chat_id, call.message.message_id, parse_mode="Markdown")
+            ludo_games.pop(chat_id, None)
+        else:
+            ludo_games[chat_id] = st
+            kb = types.InlineKeyboardMarkup(row_width=1)
+            kb.add(types.InlineKeyboardButton("🎲 फिर से पासा फेंकें", callback_data="ludo_roll"))
+            bot.edit_message_text(
+                f"🎲 **लूडो मैच चल रहा है!**\n\n"
+                f"👤 आपका पासा: **{user_dice}** ➡️ स्थिति: **{st['user_pos']}/50**\n"
+                f"🤖 AI का पासा: **{ai_dice}** ➡️ स्थिति: **{st['ai_pos']}/50**\n\n"
+                f"अगली चाल चलें:",
+                chat_id,
+                call.message.message_id,
+                reply_markup=kb,
+                parse_mode="Markdown"
+            )
+        bot.answer_callback_query(call.id)
+
+    # Tic-Tac-Toe (AI vs Player)
+    elif call.data.startswith("ttt_"):
         idx = int(call.data.split("_")[1])
         board = ttt_games.get(chat_id, [" "] * 9)
 
@@ -171,7 +234,7 @@ def callback_handler(call):
             bot.edit_message_text(f"🏁 खेल समाप्त!\n\n{msg}\nदोबारा खेलें: /game", chat_id, call.message.message_id)
             ttt_games.pop(chat_id, None)
         else:
-            bot.edit_message_text("❌ आपकी बारी (X) | ⭕ बॉट की बारी (O):", chat_id, call.message.message_id, reply_markup=get_ttt_keyboard(board))
+            bot.edit_message_text("❌ आपकी बारी (X) | ⭕ AI बॉट (O):", chat_id, call.message.message_id, reply_markup=get_ttt_keyboard(board))
         bot.answer_callback_query(call.id)
 
     # Hill Climb
@@ -270,18 +333,20 @@ def callback_handler(call):
     elif call.data.startswith("blast_"):
         bot.answer_callback_query(call.id, "💣 धमाका! ब्लॉक पूरी तरह टूट गया!")
 
-# ----------------- 9. Welcome & Help Command -----------------
+# ----------------- 11. Welcome & Help Command -----------------
 @bot.message_handler(commands=['start', 'help'])
 def send_welcome(message):
     name = message.from_user.first_name or "भाई"
     welcome_msg = (
         f"🙏 नमस्ते {name} भाई!\n\n"
         "🎮 **मजेदार गेम्स:**\n"
+        "• 🎲 लूडो गेम vs AI 👉 /ludo\n"
+        "• ❌ टिक-टैक-टो vs AI 👉 /game\n"
+        "• 🏎️ हिल क्लाइंब रेस 👉 /climb\n"
+        "• 🎬 Vidmate ओपनर 👉 /vidmate\n"
         "• 🏃 सबवे सर्फर्स 👉 /subway\n"
         "• 🍕 पिज़्ज़ा टॉवर 👉 /pizza\n"
         "• 🎮 रिमोट कंट्रोल कार 👉 /rc\n"
-        "• ❌ टिक-टैक-टो 👉 /game\n"
-        "• 🏎️ हिल क्लाइंब रेस 👉 /climb\n"
         "• 🎯 नंबर गेस 👉 /guess\n"
         "• 🎈 गुब्बारा फोड़ो 👉 /pop\n"
         "• 💥 ब्लॉक ब्लास्ट 👉 /blast\n\n"
@@ -294,7 +359,7 @@ def send_welcome(message):
     )
     bot.reply_to(message, welcome_msg, parse_mode="Markdown")
 
-# ----------------- 10. Smart Chat & All Hindi Responses -----------------
+# ----------------- 12. Smart Chat & All Hindi Responses -----------------
 @bot.message_handler(func=lambda message: True)
 def handle_chat(message):
     chat_id = message.chat.id
@@ -314,7 +379,12 @@ def handle_chat(message):
             bot.reply_to(message, f"थोड़ा छोटा नंबर सोचिए {name} भाई! 📉")
         return
 
-    # 1. कलर ट्रेडिंग क्या है / जानकारी
+    # 1. Vidmate Mention
+    if any(k in text for k in ["vidmate", "vidmat", "video download"]):
+        open_vidmate(message)
+        return
+
+    # 2. कलर ट्रेडिंग क्या है / जानकारी
     if any(k in text for k in ["kya hai", "kya hota", "what is", "wat is", "info", "detail", "kaise hota", "rule"]):
         bot.reply_to(
             message,
@@ -326,7 +396,7 @@ def handle_chat(message):
         )
         return
 
-    # 2. नंबर प्रेडिक्शन (1 नंबर या 2 नंबर)
+    # 3. नंबर प्रेडिक्शन (1 नंबर या 2 नंबर)
     if any(k in text for k in ["1 ya 2", "1 or 2", "1 number", "2 number", "ek number", "do number", "kaun sa number", "konsa number", "which no", "which number", "no 1", "no 2"]):
         chosen_num = random.choice([1, 2])
         other_num = 2 if chosen_num == 1 else 1
@@ -339,7 +409,7 @@ def handle_chat(message):
         )
         return
 
-    # 3. मार्केट ट्रेंड (ऊपर जाएगा या नीचे / Up or Down)
+    # 4. मार्केट ट्रेंड (ऊपर जाएगा या नीचे / Up or Down)
     if any(k in text for k in ["upar", "niche", "up", "down", "upr", "nich", "fall", "girawat", "badhega", "kam hoga"]):
         direction = random.choice(["📈 ऊपर (UP)", "📉 नीचे (DOWN)"])
         rsi_val = random.randint(35, 65)
@@ -353,7 +423,7 @@ def handle_chat(message):
         )
         return
 
-    # 4. कलर प्रेडिक्शन: Red vs Blue
+    # 5. कलर प्रेडिक्शन: Red vs Blue
     if ("red" in text and "blue" in text) or ("lal" in text and "nila" in text) or ("rd" in text and "blu" in text):
         chosen_color = random.choice(["🔴 लाल (RED)", "🔵 नीला (BLUE / VIOLET)"])
         bot.reply_to(
@@ -364,7 +434,7 @@ def handle_chat(message):
         )
         return
 
-    # 5. सीधा रंग पूछने पर (Red / Blue / Green)
+    # 6. सीधा रंग पूछने पर (Red / Blue / Green)
     if any(k in text for k in ["red", "laal", "lal", "rd"]):
         bot.reply_to(message, f"🔴 **लाल (RED) प्रेडिक्शन कन्फर्म:**\n\n{name} भाई, अगला रंग **लाल (RED)** आने की 85% संभावना दिख रही है!", parse_mode="Markdown")
         return
@@ -383,7 +453,7 @@ def handle_chat(message):
         bot.reply_to(message, f"📊 **कलर ट्रेडिंग सिग्नल ({name} भाई):**\n\nहमारे हिसाब से अगला रंग **{predicted}** आ सकता है!\n\n*(नोट: हमेशा कम पैसों से ही खेलें।)*", parse_mode="Markdown")
         return
 
-    # 6. कोडिंग और 40 लेवल
+    # 7. कोडिंग और 40 लेवल
     if any(k in text for k in ["cod", "coding", "koding", "40", "market", "mrkt"]):
         bot.reply_to(
             message,
@@ -393,25 +463,26 @@ def handle_chat(message):
         )
         return
 
-    # 7. अभिवादन (Greetings)
+    # 8. अभिवादन (Greetings)
     if any(greet in text for greet in ['hi', 'hello', 'hey', 'namaste', 'ram ram', 'kaise ho', 'hlo', 'hlw', 'sup']):
         bot.reply_to(message, f"अरे नमस्ते {name} भाई! ❤️\nबताइए आज क्या खेलना पसंद करेंगे या ट्रेडिंग प्रेडिक्शन चाहिए?")
         return
 
-    # सामान्य डिफ़ॉल्ट संदेश (हिंदी में)
+    # डिफ़ॉल्ट संदेश
     bot.reply_to(
         message,
         f"अरे {name} भाई! 😊\n\n"
         "आप ट्रेडिंग प्रेडिक्शन (लाल, नीला, ऊपर/नीचे, 1 या 2 नंबर) पूछ सकते हैं या ये गेम्स खेल सकते हैं:\n"
+        "• /ludo - लूडो गेम vs AI\n"
+        "• /game - टिक-टैक-टो vs AI\n"
+        "• /climb - हिल क्लाइंब रेस\n"
+        "• /vidmate - Vidmate ओपनर\n"
         "• /subway - सबवे सर्फर्स\n"
         "• /pizza - पिज़्ज़ा टॉवर\n"
-        "• /rc - रिमोट कंट्रोल कार\n"
-        "• /game - टिक-टैक-टो\n"
-        "• /climb - हिल क्लाइंब रेस\n"
-        "• /guess - नंबर गेस खेलें"
+        "• /rc - रिमोट कंट्रोल कार"
     )
 
-# ----------------- 11. Polling -----------------
+# ----------------- 13. Polling -----------------
 if __name__ == '__main__':
     print("बॉट सफलता पूर्वक चालू हो गया है...")
     bot.infinity_polling()
