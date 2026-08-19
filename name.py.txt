@@ -1,0 +1,62 @@
+
+‎         
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Tic-Tac-Toe</title>
+  <style>
+    body { font-family: Arial, sans-serif; display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 100vh; margin: 0; background: #121212; color: #ffffff; }
+    .grid { display: grid; grid-template-columns: repeat(3, 80px); grid-gap: 5px; margin: 20px 0; }
+    .cell { width: 80px; height: 80px; background: #222222; border-radius: 6px; font-size: 32px; display: flex; align-items: center; justify-content: center; cursor: pointer; }
+    button { padding: 10px 20px; font-weight: bold; background: #00d2d3; border: none; border-radius: 4px; cursor: pointer; color: #000000; }
+  </style>
+</head>
+<body>
+  <h2>Tic-Tac-Toe</h2>
+  <div id="status">Turn: Player X</div>
+  <div class="grid" id="board"></div>
+  <button onclick="resetGame()">Restart</button>
+  <script>
+    const bEl = document.getElementById('board');
+    const sEl = document.getElementById('status');
+    let b = Array(9).fill(""), p = "X", over = false;
+    const wins = [[0,1,2],[3,4,5],[6,7,8],[0,3,6],[1,4,7],[2,5,8],[0,4,8],[2,4,6]];
+    function render() {
+      bEl.innerHTML = "";
+      b.forEach((v, i) => {
+        const c = document.createElement('div');
+        c.className = 'cell';
+        c.innerText = v;
+        c.onclick = () => move(i);
+        bEl.appendChild(c);
+      });
+    }
+    function move(i) {
+      if(b[i] !== "" || over) return;
+      b[i] = p;
+      if(wins.some(w => w.every(idx => b[idx] === p))) {
+        sEl.innerText = "Player " + p + " Wins!";
+        over = true;
+      } else if(b.every(x => x !== "")) {
+        sEl.innerText = "Draw!";
+        over = true;
+      } else {
+        p = p === "X" ? "O" : "X";
+        sEl.innerText = "Turn: Player " + p;
+      }
+      render();
+    }
+    function resetGame() {
+      b = Array(9).fill("");
+      p = "X";
+      over = false;
+      sEl.innerText = "Turn: Player X";
+      render();
+    }
+    render();
+  </script>
+</body>
+</html>
+
