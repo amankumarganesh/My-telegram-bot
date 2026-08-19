@@ -1,3 +1,103 @@
+import os
+from threading import Thread
+from flask import Flask
+import telebot
+
+# ----------------- 1. Web Server for Render -----------------
+app = Flask('')
+
+
+@app.route('/')
+def home():
+  return 'Bot is alive and running!'
+
+
+def run():
+  app.run(host='0.0.0.0', port=8080)
+
+
+def keep_alive():
+  t = Thread(target=run)
+  t.daemon = True
+  t.start()
+
+
+keep_alive()
+
+# ----------------- 2. Bot Configuration -----------------
+# Environment variable se token lega ya direct token use karega
+BOT_TOKEN = os.environ.get(
+    'BOT_TOKEN', '8889254295:AAHh8bYuFP5qty19cpP7HMFlPZ39LMniU80'
+)
+bot = telebot.TeleBot(BOT_TOKEN)
+
+
+# /start aur /help command handler
+@bot.message_handler(commands=['start', 'help'])
+def send_welcome(message):
+  welcome_text = (
+      '🙏 आपका बहुत-बहुत स्वागत है!\n\n'
+      'मैं आपका स्मार्ट असिस्टेंट हूँ। आप मुझसे कोडिंग, कलर ट्रेडिंग या ज़िंदगी से जुड़ा '
+      'कोई भी सवाल पूछ सकते हैं। बताइए मैं आपकी क्या मदद करूँ?'
+  )
+  bot.reply_to(message, welcome_text)
+
+
+# Sabhi messages ka reply dene ke liye handler
+@bot.message_handler(func=lambda message: True)
+def handle_all_messages(message):
+  user_text = message.text.lower() if message.text else ''
+
+  # 1. Agar Coding, Girawat ya 40 ke baare me ho
+  if 'coding' in user_text or 'girawat' in user_text or '40' in user_text:
+    reply = (
+        'नमस्ते भाई! 👋\n\n'
+        '💻 **Coding & Analysis Update:**\n'
+        '• कोडिंग में लॉजिक और एरर हैंडलिंग सबसे महत्वपूर्ण है।\n'
+        '• गिरावट (Market/Trend Fall) या 40 के लेवल पर हमेशा रिस्क मैनेजमेंट और स्टॉप-लॉस का ध्यान रखें।\n'
+        '• धैर्य रखें और सही स्ट्रेटेजी के साथ आगे बढ़ें।\n\n'
+        'अगर आपको कोई खास कोडिंग या डेटा चाहिए तो ज़रूर बताएं!'
+    )
+
+  # 2. Agar Color Trading se related ho
+  elif (
+      'color' in user_text
+      or 'colour' in user_text
+      or 'trading' in user_text
+      or 'trade' in user_text
+  ):
+    reply = (
+        'स्वागत है आपका! 📈\n\n'
+        '🎨 **Color Trading Info:**\n'
+        '• कलर ट्रेडिंग में रेड, ग्रीन और वॉयलेट जैसे कलर्स पर प्रेडिक्शन होता है।\n'
+        '• इसमें बहुत जोखिम (Risk) होता है, इसलिए बिना सही समझ और बजट के कभी भी बड़ा पैसा न लगाएं।\n'
+        '• हमेशा समझदारी और सावधानी से खेलें!'
+    )
+
+  # 3. Agar Zindagi ya Life ke baare me ho
+  elif 'zindagi' in user_text or 'life' in user_text:
+    reply = (
+        'जी भाई, ज़िंदगी का सफर बहुत खूबसूरत है! ✨\n\n'
+        'उतार-चढ़ाव तो हर जगह आते हैं, चाहे ज़िंदगी हो या ट्रेडिंग। बस सीखते रहिए, '
+        'मेहनत करते रहिए और हमेशा सकारात्मक रहिए।'
+    )
+
+  # 4. Koi banda kuch bhi aur likhe, to ye polite & welcoming reply jayega
+  else:
+    reply = (
+        f'🙏 नमस्ते {message.from_user.first_name}! आपका स्वागत है।\n\n'
+        'मुझे आपका मैसेज मिल गया है। आप कोडिंग, गिरावट/40, कलर ट्रेडिंग या ज़िंदगी से जुड़ा '
+        'कोई भी सवाल पूछ सकते हैं। मैं आपकी पूरी मदद के लिए यहाँ हूँ!'
+    )
+
+  bot.reply_to(message, reply)
+
+
+# Bot ko continuously chalane ke liye
+if __name__ == '__main__':
+  print('Bot is running...')
+  bot.infinity_polling()
+
 import telebot
 from telebot import types
 
