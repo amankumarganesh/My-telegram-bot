@@ -2,7 +2,7 @@ import telebot
 from telebot import types
 
 # Yahan apna Telegram Bot Token dalein
-BOT_TOKEN = "YOUR_TELEGRAM_BOT_TOKEN"
+BOT_TOKEN = "8889254295:AAFh8bYuFP5qty19cpP7HMFlPZ39lMNiU80"
 bot = telebot.TeleBot(BOT_TOKEN)
 
 # Game state store karne ke liye dictionary
