@@ -20,7 +20,7 @@ logging.basicConfig(
 )
 
 # --- Configuration (Environment Variables prefer karein) ---
-BOT_TOKEN = os.getenv("BOT_TOKEN", "8640814348:AAHlJwDOmEKjY7hAzEXqybPdcslgKGnM-w4")
+BOT_TOKEN = os.getenv("BOT_TOKEN", "8640814348:AAFi6yA_bwZY7FdySQEno9jOMClKuZgoamc"
 EARNKARO_API_KEY = os.getenv("EARNKARO_API_KEY", "YOUR_EARNKARO_API_KEY")
 CHANNEL_ID = os.getenv("CHANNEL_ID", "@YOUR_CHANNEL_USERNAME")  # e.g., @mydeals
 
