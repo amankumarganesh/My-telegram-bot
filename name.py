@@ -139,7 +139,7 @@ if __name__ == "__main__":
     # Flask thread
     threading.Thread(target=run_flask, daemon=True).start()
 
-    BOT_TOKEN = "8889254295:AAFh8bYuFP5qty19cpP7HMFlPZ39lMNiU80"
+    BOT_TOKEN ="8889254295:AAFh8bYuFP5qty19cpP7HMFlPZ39lMNiU80"
 
     application = ApplicationBuilder().token(BOT_TOKEN).build()
 
