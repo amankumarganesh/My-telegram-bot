@@ -150,7 +150,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
 if __name__ == "__main__":
     threading.Thread(target=run_flask, daemon=True).start()
 
-    BOT_TOKEN = "8889254295:AAFh8bYuFP5qty19cpP7HMFlPZ39lMNiU80"
+    BOT_TOKEN = "8640814348:AAHlJwDOmEKjY7hAzEXqybPdcslgKGnM-w4"
 
     application = ApplicationBuilder().token(BOT_TOKEN).build()
 
