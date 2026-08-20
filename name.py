@@ -102,7 +102,7 @@ if __name__ == "__main__":
     threading.Thread(target=run_flask, daemon=True).start()
 
     # Telegram Bot Token (Render Environment Variables me set karein)
-    BOT_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN")
+    BOT_TOKEN = os.environ.get("8889254295:AAFh8bYuFP5qty19cpP7HMFlPZ39lMNiU80")
 
     if not BOT_TOKEN:
         raise ValueError("Error: TELEGRAM_BOT_TOKEN environment variable set nahi hai!")
